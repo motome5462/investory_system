@@ -130,35 +130,50 @@ app.delete('/api/items/:id', (req, res) => {
     });
 });
 
-// ตั้งค่าที่เก็บรูปภาพ
+// ตั้งค่าการเก็บไฟล์
+// ตั้งค่าการเก็บไฟล์ (ย้ายไว้ด้านบน API)
 const storage = multer.diskStorage({
-    destination: './uploads/',
+    destination: './uploadimages/',
     filename: function(req, file, cb) {
         cb(null, 'item-' + Date.now() + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage: storage });
 
-// API บันทึกสินค้า พร้อมรับไฟล์รูปภาพ
+// API สำหรับเพิ่มสินค้า (รองรับทั้งรูปภาพ และข้อมูลแบบอาเรย์ SN)
 app.post('/api/items', upload.single('image'), (req, res) => {
-    const { project_id, item_name, quantity, sn_numbers, note } = req.body;
-    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
-    
-    // แปลง sn_numbers จาก JSON string กลับเป็น array
-    const sns = JSON.parse(sn_numbers);
+    try {
+        const { project_id, item_name, quantity, sn_numbers, note } = req.body;
+        
+        // ตรวจสอบข้อมูลเบื้องต้น
+        if (!project_id || !item_name || !sn_numbers) {
+            return res.status(400).json({ message: "ข้อมูลส่งมาไม่ครบถ้วน (Check project_id, item_name, sn_numbers)" });
+        }
 
-    // วนลูปบันทึกตามจำนวน SN (หรือบันทึกก้อนเดียวตาม Logic ของคุณ)
-    // ตัวอย่างการบันทึกเข้าฐานข้อมูล:
-    const sql = "INSERT INTO withdrawal_items (project_id, item_name, quantity, sn_number, note, image_url) VALUES ?";
-    const values = sns.map(sn => [project_id, item_name, 1, sn, note, image_url]);
+        const image_url = req.file ? `/uploadimages/${req.file.filename}` : null;
+        
+        // แปลง JSON string ของ SN จาก Flutter เป็น List
+        const sns = JSON.parse(sn_numbers); 
 
-    db.query(sql, [values], (err, result) => {
-        if (err) return res.status(500).json(err);
-        res.json({ status: 'success' });
-    });
+        // เตรียมข้อมูลสำหรับ Bulk Insert (INSERT ... VALUES ?)
+        // หมายเหตุ: quantity ของแต่ละ SN คือ 1
+        const sql = "INSERT INTO withdrawal_items (project_id, item_name, quantity, sn_number, note, image_url) VALUES ?";
+        const values = sns.map(sn => [project_id, item_name, 1, sn, note || null, image_url]);
+
+        db.query(sql, [values], (err, result) => {
+            if (err) {
+                console.error("Database Error:", err);
+                return res.status(500).json(err);
+            }
+            res.json({ status: 'success', message: 'บันทึกรายการสินค้าเรียบร้อยแล้ว' });
+        });
+    } catch (error) {
+        console.error("Server Catch Error:", error);
+        res.status(500).json({ message: "Server Error: " + error.message });
+    }
 });
 
-// เปิดให้เข้าถึงโฟลเดอร์รูปภาพได้
-app.use('/uploads', express.static('uploads'));
+// อย่าลืมบรรทัดนี้ เพื่อให้ Flutter เข้าถึงรูปภาพได้
+app.use('/uploadimages', express.static('uploadimages'));
 
 app.listen(3000, () => console.log('Backend Server running on port 3000'));

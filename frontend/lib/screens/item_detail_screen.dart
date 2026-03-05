@@ -60,62 +60,72 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     });
   }
 
-  void addItem() {
-    if (itemCtrl.text.isEmpty || qtyCtrl.text.isEmpty) return;
+void addItem() {
+  if (itemCtrl.text.isEmpty || qtyCtrl.text.isEmpty) return;
 
-    List<String> sns = snControllers.map((c) => c.text).toList();
-
-    setState(() {
-      itemsList.add({
-        "item_name": itemCtrl.text,
-        "quantity": qtyCtrl.text,
-        "sn_list": sns,
-        "note": noteCtrl.text,
-        "image_file": _image, // เก็บไฟล์ไว้ในรายการชั่วคราว
-      });
+  setState(() {
+    itemsList.add({
+      "item_name": itemCtrl.text,
+      "quantity": qtyCtrl.text,
+      "sn_list": snControllers.map((c) => c.text).toList(),
+      "note": noteCtrl.text,
+      "image_file": _image, // ตรวจสอบว่ามีบรรทัดนี้เพื่อเก็บไฟล์รูปภาพ
     });
+  });
 
-    // ล้างข้อมูล
-    itemCtrl.clear();
-    qtyCtrl.clear();
-    noteCtrl.clear();
-    _image = null;
-    snControllers.clear();
-    snControllers.add(TextEditingController());
-  }
+  // ล้างค่าหลังจากเพิ่ม
+  itemCtrl.clear();
+  qtyCtrl.clear();
+  noteCtrl.clear();
+  setState(() {
+    _image = null; // รีเซ็ตรูปภาพหน้าจอหลังจากกดเพิ่มลงรายการชั่วคราว
+  });
+}
 
-  Future<void> saveAll() async {
-    if (itemsList.isEmpty) return;
+Future<void> saveAll() async {
+  if (itemsList.isEmpty) return;
 
-    try {
-      for (var item in itemsList) {
-        // ใช้ MultipartRequest เพื่อส่งไฟล์
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('http://10.0.2.2:3000/api/items'),
-        );
+  try {
+    for (var item in itemsList) {
+      // 1. ตรวจสอบ Method และ URL
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://10.0.2.2:3000/api/items'),
+      );
 
-        request.fields['project_id'] = widget.projectId.toString();
-        request.fields['item_name'] = item['item_name'];
-        request.fields['quantity'] = item['quantity'];
-        request.fields['sn_numbers'] = jsonEncode(item['sn_list']);
-        request.fields['note'] = item['note'];
+      // 2. ตรวจสอบชื่อ Key ใน fields (ต้องตรงกับที่ Backend เรียกใช้ใน req.body)
+      request.fields['project_id'] = widget.projectId.toString(); // ต้องแปลงเป็น String
+      request.fields['item_name'] = item['item_name'].toString();
+      request.fields['quantity'] = item['quantity'].toString();
+      
+      // 3. ตรวจสอบการส่ง SN (ต้องส่งเป็น JSON String เพื่อให้ Backend ใช้ JSON.parse ได้)
+      request.fields['sn_numbers'] = jsonEncode(item['sn_list']); 
+      
+      request.fields['note'] = item['note'] ?? "";
 
-        if (item['image_file'] != null) {
-          request.files.add(await http.MultipartFile.fromPath(
-            'image', // ชื่อ Field ที่ Backend รอรับ
-            item['image_file'].path,
-          ));
-        }
-
-        await request.send();
+      // 4. ตรวจสอบการแนบไฟล์รูปภาพ
+      if (item['image_file'] != null) {
+        request.files.add(await http.MultipartFile.fromPath(
+          'image', // *** สำคัญ: ชื่อต้องตรงกับ upload.single('image') ใน Node.js ***
+          item['image_file'].path,
+        ));
       }
-      if (!mounted) return;
-      Navigator.popUntil(context, (route) => route.isFirst);
-    } catch (e) {
-      debugPrint("Error saving: $e");
+
+      // 5. ส่ง Request
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        debugPrint("บันทึกไม่สำเร็จ: ${response.body}");
+      }
     }
+    
+    if (!mounted) return;
+    Navigator.popUntil(context, (route) => route.isFirst);
+  } catch (e) {
+    debugPrint("Error saving items: $e");
   }
+}
 
   @override
   Widget build(BuildContext context) {

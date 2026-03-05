@@ -59,28 +59,44 @@ app.get('/api/projects', (req, res) => {
     });
 });
 
-// 1. ดึงข้อมูลโครงการและรายการสินค้า
+// ดึงข้อมูลโครงการ พร้อมรายการสินค้า
 app.get('/api/projects/:id', (req, res) => {
     const projectId = req.params.id;
-    const sqlProject = "SELECT * FROM projects WHERE id = ?";
-    const sqlItems = "SELECT * FROM items WHERE project_id = ?";
+    // Query แรก: ดึงข้อมูลโครงการ
+    db.query("SELECT * FROM projects WHERE id = ?", [projectId], (err, projectResults) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (projectResults.length === 0) return res.status(404).json({ message: "ไม่พบโครงการ" });
 
-    db.query(sqlProject, [projectId], (err, projectResult) => {
-        if (err) return res.status(500).send(err);
-        db.query(sqlItems, [projectId], (err, itemsResult) => {
-            if (err) return res.status(500).send(err);
-            res.json({ project: projectResult[0], items: itemsResult });
+        // Query ที่สอง: ดึงสินค้า (ใช้ LEFT JOIN หรือ Query แยกก็ได้)
+        db.query("SELECT * FROM withdrawal_items WHERE project_id = ?", [projectId], (err, itemResults) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // *** ส่งกลับรูปแบบนี้เท่านั้น ***
+            res.json({
+                project: projectResults[0],
+                items: itemResults
+            });
         });
     });
 });
 
-// 2. อัปเดตข้อมูลโครงการ (ใช้ PUT)
+// แก้ไขข้อมูลโครงการ
 app.put('/api/projects/:id', (req, res) => {
     const { project_name, project_date, project_detail } = req.body;
     const sql = "UPDATE projects SET project_name = ?, project_date = ?, project_detail = ? WHERE id = ?";
     db.query(sql, [project_name, project_date, project_detail, req.params.id], (err, result) => {
         if (err) return res.status(500).send(err);
-        res.json({ message: "Updated successfully" });
+        res.json({ message: "Success" });
+    });
+});
+
+// เพิ่มสินค้าใหม่เข้าไปในโครงการ
+app.post('/api/items', (req, res) => {
+    const { project_id, item_name, sn_number, quantity } = req.body;
+    const sql = "INSERT INTO items (project_id, item_name, sn_number, quantity) VALUES (?, ?, ?, ?)";
+    db.query(sql, [project_id, item_name, sn_number, quantity], (err, result) => {
+        if (err) return res.status(500).send(err);
+        res.status(201).json({ id: result.insertId });
     });
 });
 

@@ -152,19 +152,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     trailing: const Icon(Icons.chevron_right, color: Colors.blue),
-                    onTap: () async {
-                      // นำทางไปหน้าละเอียดโครงการ และส่ง projectId ไป
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ProjectDetailScreen(
-                            projectId: project['id'], 
-                            userName: widget.userName
-                          ),
-                        ),
-                      );
-                      setState(() {}); // รีเฟรชข้อมูลเมื่อกลับมาจากหน้าแก้ไข
-                    },
+// ใน HomeScreen.dart
+onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProjectDetailScreen(
+        projectId: project['id'], // ตรวจสอบชื่อคีย์ id ให้ตรงกับในภาพ image_92fe5c.png
+        userName: widget.userName,
+      ),
+    ),
+  );
+}
                   ),
                 );
               },

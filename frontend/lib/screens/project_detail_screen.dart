@@ -17,62 +17,49 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   bool isEditing = false;
   bool isLoading = true;
 
-  // Controllers สำหรับข้อมูลโครงการ
   final nameCtrl = TextEditingController();
   final detailCtrl = TextEditingController();
   DateTime selectedDate = DateTime.now();
   
-  // รายการสินค้า (จะดึงมาจากฐานข้อมูล)
   List<dynamic> items = [];
 
   @override
   void initState() {
     super.initState();
-    fetchData(); // ดึงข้อมูลโครงการและสินค้าทันทีที่เปิดหน้า
+    fetchData();
   }
 
-  // ฟังก์ชันดึงข้อมูลโครงการและรายการสินค้าจาก API
-Future<void> fetchData() async {
-  try {
-    debugPrint("กำลังดึงข้อมูลโครงการ ID: ${widget.projectId}");
-    final response = await http.get(
-      Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}')
-    ).timeout(const Duration(seconds: 10)); // เพิ่ม Timeout กันค้าง
+  // ดึงข้อมูลโครงการและรายการสินค้า
+  Future<void> fetchData() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}')
+      ).timeout(const Duration(seconds: 10));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      debugPrint("ได้รับข้อมูล: $data");
-
-      setState(() {
-        // ดึงข้อมูลโครงการ: รองรับทั้งแบบ data['project'] และ data ตรงๆ
-        var projectData = data['project'] ?? data; 
-        
-        nameCtrl.text = projectData['project_name']?.toString() ?? "";
-        detailCtrl.text = projectData['project_detail']?.toString() ?? "";
-        
-        if (projectData['project_date'] != null) {
-          selectedDate = DateTime.parse(projectData['project_date'].toString());
-        }
-        
-        // ดึงรายการสินค้า
-        items = data['items'] ?? [];
-        isLoading = false;
-      });
-    } else {
-      throw "Server ตอบกลับด้วยรหัส: ${response.statusCode}";
-    }
-  } catch (e) {
-    debugPrint("Error Fetching: $e");
-    if (mounted) {
-      setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("โหลดข้อมูลไม่สำเร็จ: $e"), backgroundColor: Colors.red),
-      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          var projectData = data['project'] ?? data; 
+          nameCtrl.text = projectData['project_name']?.toString() ?? "";
+          detailCtrl.text = projectData['project_detail']?.toString() ?? "";
+          if (projectData['project_date'] != null) {
+            selectedDate = DateTime.parse(projectData['project_date'].toString());
+          }
+          items = data['items'] ?? [];
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("โหลดข้อมูลไม่สำเร็จ: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
-}
 
-  // ฟังก์ชันบันทึกการแก้ไขข้อมูลโครงการ (PUT)
+  // บันทึกการแก้ไขข้อมูลโครงการและกลับหน้าแรก
   Future<void> updateProject() async {
     try {
       final response = await http.put(
@@ -87,35 +74,65 @@ Future<void> fetchData() async {
 
       if (response.statusCode == 200) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("อัปเดตข้อมูลโครงการสำเร็จ")));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("บันทึกข้อมูลโครงการสำเร็จ"), backgroundColor: Colors.green)
+          );
+          // ย้อนกลับไปหน้าแรก (Home)
+          Navigator.pop(context); 
         }
-        setState(() => isEditing = false);
-        fetchData(); // โหลดข้อมูลใหม่เพื่อยืนยันความถูกต้อง
       }
     } catch (e) {
       debugPrint("Error updating project: $e");
     }
   }
 
-  // ฟังก์ชันลบสินค้า (Delete)
+  // เพิ่มสินค้าพร้อมหมายเหตุไปยัง Backend
+  Future<void> addItemApi(String name, String sn, String qty, String note) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:3000/api/items'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "project_id": widget.projectId,
+          "item_name": name,
+          "sn_number": sn,
+          "quantity": int.tryParse(qty) ?? 0,
+          "note": note 
+        }),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        fetchData(); // รีเฟรชรายการในหน้า
+      }
+    } catch (e) {
+      debugPrint("Error adding item: $e");
+    }
+  }
+
+  // ลบสินค้าออกจากโครงการ
   Future<void> deleteItem(int itemId) async {
     try {
       final response = await http.delete(
         Uri.parse('http://10.0.2.2:3000/api/items/$itemId'),
       );
       if (response.statusCode == 200) {
-        fetchData(); // รีเฟรชรายการหลังลบสำเร็จ
+        fetchData(); 
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("ลบรายการสินค้าแล้ว"))
+          );
+        }
       }
     } catch (e) {
       debugPrint("Error deleting item: $e");
     }
   }
 
-  // ฟังก์ชันแสดง Dialog เพื่อเพิ่มสินค้าใหม่เข้าไปในโครงการนี้
+  // แสดง Dialog เพิ่มสินค้าพร้อมช่องหมายเหตุ
   void showAddItemDialog() {
     final itemNameCtrl = TextEditingController();
     final snCtrl = TextEditingController();
     final qtyCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -128,6 +145,7 @@ Future<void> fetchData() async {
               TextField(controller: itemNameCtrl, decoration: const InputDecoration(labelText: "ชื่อสินค้า", prefixIcon: Icon(Icons.inventory))),
               TextField(controller: snCtrl, decoration: const InputDecoration(labelText: "S/N Number", prefixIcon: Icon(Icons.qr_code))),
               TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: "จำนวน", prefixIcon: Icon(Icons.numbers)), keyboardType: TextInputType.number),
+              TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: "หมายเหตุ", prefixIcon: Icon(Icons.note_add))), 
             ],
           ),
         ),
@@ -136,7 +154,7 @@ Future<void> fetchData() async {
           ElevatedButton(
             onPressed: () async {
               if (itemNameCtrl.text.isNotEmpty && qtyCtrl.text.isNotEmpty) {
-                await addItemApi(itemNameCtrl.text, snCtrl.text, qtyCtrl.text);
+                await addItemApi(itemNameCtrl.text, snCtrl.text, qtyCtrl.text, noteCtrl.text);
                 if (mounted) Navigator.pop(context);
               }
             }, 
@@ -145,27 +163,6 @@ Future<void> fetchData() async {
         ],
       ),
     );
-  }
-
-  // API เพิ่มสินค้าใหม่ผูกกับ projectId นี้
-  Future<void> addItemApi(String name, String sn, String qty) async {
-    try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/api/items'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "project_id": widget.projectId,
-          "item_name": name,
-          "sn_number": sn,
-          "quantity": int.tryParse(qty) ?? 0
-        }),
-      );
-      if (response.statusCode == 201) {
-        fetchData(); // โหลดรายการสินค้าใหม่มาแสดงทันที
-      }
-    } catch (e) {
-      debugPrint("Error adding item: $e");
-    }
   }
 
   @override
@@ -188,7 +185,6 @@ Future<void> fetchData() async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- ส่วนข้อมูลโครงการ ---
                 const Row(
                   children: [
                     Icon(Icons.info_outline, color: Colors.blue),
@@ -200,19 +196,13 @@ Future<void> fetchData() async {
                 TextField(
                   controller: nameCtrl, 
                   enabled: isEditing, 
-                  decoration: InputDecoration(
-                    labelText: "ชื่อโครงการ", 
-                    filled: !isEditing,
-                    fillColor: isEditing ? Colors.transparent : Colors.grey[100],
-                    border: const OutlineInputBorder()
-                  )
+                  decoration: const InputDecoration(labelText: "ชื่อโครงการ", border: OutlineInputBorder())
                 ),
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(4),
-                    color: isEditing ? Colors.transparent : Colors.grey[100],
                   ),
                   child: ListTile(
                     title: Text("วันที่: ${DateFormat('dd/MM/yyyy').format(selectedDate)}"),
@@ -233,46 +223,24 @@ Future<void> fetchData() async {
                   controller: detailCtrl, 
                   enabled: isEditing, 
                   maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: "รายละเอียดงาน", 
-                    filled: !isEditing,
-                    fillColor: isEditing ? Colors.transparent : Colors.grey[100],
-                    border: const OutlineInputBorder()
-                  )
+                  decoration: const InputDecoration(labelText: "รายละเอียดงาน", border: OutlineInputBorder())
                 ),
-                
                 const Divider(height: 40, thickness: 1.2),
-                
-                // --- ส่วนรายการสินค้าที่เคยบันทึกไว้ ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.list_alt, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                      ],
-                    ),
+                    const Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     ElevatedButton.icon(
                       onPressed: showAddItemDialog,
                       icon: const Icon(Icons.add),
                       label: const Text("เพิ่มสินค้า"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green, 
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                     ),
                   ],
                 ),
                 const SizedBox(height: 15),
-                
                 items.isEmpty 
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 30),
-                      child: Center(child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey))),
-                    )
+                  ? const Center(child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -283,16 +251,36 @@ Future<void> fetchData() async {
                           elevation: 2,
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.blueAccent, 
-                              child: Icon(Icons.inventory_2, color: Colors.white, size: 20)
-                            ),
+                            leading: const CircleAvatar(child: Icon(Icons.inventory_2)),
                             title: Text(item['item_name'] ?? "สินค้าไม่มีชื่อ", style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("S/N: ${item['sn_number'] ?? '-'} | จำนวน: ${item['quantity'] ?? 0}"),
-                            trailing: isEditing ? IconButton(
+                            subtitle: Text(
+                              "S/N: ${item['sn_number'] ?? '-'} | จำนวน: ${item['quantity'] ?? 0}\n"
+                              "หมายเหตุ: ${item['note'] ?? '-'}"
+                            ),
+                            isThreeLine: true,
+                            trailing: IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.red),
-                              onPressed: () => deleteItem(item['id']), // ลบสินค้าออกจากฐานข้อมูล
-                            ) : null,
+                              onPressed: () {
+                                // ยืนยันก่อนลบ
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("ยืนยันการลบ"),
+                                    content: const Text("คุณต้องการลบสินค้านี้ใช่หรือไม่?"),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          deleteItem(item['id']);
+                                        }, 
+                                        child: const Text("ลบ", style: TextStyle(color: Colors.red))
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         );
                       },

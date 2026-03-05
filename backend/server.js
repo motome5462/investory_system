@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. เชื่อมต่อ MySQL (ปรับแต่ง User/Password ตามเครื่องคุณ)
+// 1. เชื่อมต่อ MySQL
 const db = mysql.createConnection({
     host: 'localhost',
     user: 'root',
@@ -19,47 +19,44 @@ db.connect(err => {
     console.log('Connected to MySQL Database.');
 });
 
-// 2. API Login (แบบจำลอง)
+// 2. API Login (เช็คจากตาราง users ตามจริง)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    // ในแอปจริงควรเช็คจากตาราง users
-    if (username === 'admin' && password === '1234') {
-        res.json({ status: 'success', user_id: 1 });
-    } else {
-        res.status(401).json({ status: 'error', message: 'Login Failed' });
-    }
+    const sql = "SELECT id, full_name FROM users WHERE username = ? AND password = ?";
+    db.query(sql, [username, password], (err, results) => {
+        if (err) return res.status(500).json(err);
+        if (results.length > 0) {
+            res.json({ status: 'success', user_id: results[0].id, full_name: results[0].full_name });
+        } else {
+            res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+        }
+    });
 });
 
-// 3. API บันทึกหน้าแรก (Projects)
+// 3. API บันทึกโครงการใหม่
 app.post('/api/projects', (req, res) => {
-    const { project_name, project_date, project_time, project_detail } = req.body;
-    const sql = "INSERT INTO projects (project_name, project_date, project_time, project_detail) VALUES (?, ?, ?, ?)";
-    db.query(sql, [project_name, project_date, project_time, project_detail], (err, result) => {
+    const { project_name, project_date, project_time, project_detail, user_id } = req.body;
+    const sql = "INSERT INTO projects (project_name, project_date, project_time, project_detail, user_id) VALUES (?, ?, ?, ?, ?)";
+    db.query(sql, [project_name, project_date, project_time, project_detail, user_id || 1], (err, result) => {
         if (err) return res.status(500).json(err);
-        res.json({ project_id: result.insertId }); // ส่ง ID กลับไปให้ Flutter
+        res.json({ project_id: result.insertId });
     });
 });
 
-// 4. API บันทึกหน้าที่สอง (Items)
-app.post('/api/items', (req, res) => {
-    const { project_id, item_name, quantity, sn_number, note } = req.body;
-    const sql = "INSERT INTO withdrawal_items (project_id, item_name, quantity, sn_number, note) VALUES (?, ?, ?, ?, ?)";
-    db.query(sql, [project_id, item_name, quantity, sn_number, note], (err, result) => {
-        if (err) return res.status(500).json(err);
-        res.json({ status: 'success' });
-    });
-});
-
-// API สำหรับดึงโครงการทั้งหมดมาแสดงที่หน้า Home
+// 4. API สำหรับดึงโครงการทั้งหมด (Join กับตาราง users เพื่อเอาชื่อผู้บันทึก)
 app.get('/api/projects', (req, res) => {
-    const sql = "SELECT * FROM projects ORDER BY created_at DESC";
+    const sql = `
+        SELECT p.*, u.full_name 
+        FROM projects p 
+        LEFT JOIN users u ON p.user_id = u.id 
+        ORDER BY p.created_at DESC`;
     db.query(sql, (err, results) => {
         if (err) return res.status(500).json(err);
         res.json(results);
     });
 });
 
-// ดึงข้อมูลโครงการ พร้อมรายการสินค้า
+// 5. API ดึงข้อมูลโครงการ พร้อมรายการสินค้า (ใช้ตาราง withdrawal_items ตามภาพ)
 app.get('/api/projects/:id', (req, res) => {
     const projectId = req.params.id;
     // Query แรก: ดึงข้อมูลโครงการ
@@ -67,11 +64,10 @@ app.get('/api/projects/:id', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (projectResults.length === 0) return res.status(404).json({ message: "ไม่พบโครงการ" });
 
-        // Query ที่สอง: ดึงสินค้า (ใช้ LEFT JOIN หรือ Query แยกก็ได้)
+        // Query ที่สอง: ดึงสินค้าจากตาราง withdrawal_items
         db.query("SELECT * FROM withdrawal_items WHERE project_id = ?", [projectId], (err, itemResults) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            // *** ส่งกลับรูปแบบนี้เท่านั้น ***
             res.json({
                 project: projectResults[0],
                 items: itemResults
@@ -80,23 +76,36 @@ app.get('/api/projects/:id', (req, res) => {
     });
 });
 
-// แก้ไขข้อมูลโครงการ
+// 6. แก้ไขข้อมูลโครงการ
+// แก้ไขข้อมูลโครงการ (PUT)
 app.put('/api/projects/:id', (req, res) => {
+    const projectId = req.params.id;
     const { project_name, project_date, project_detail } = req.body;
+    
     const sql = "UPDATE projects SET project_name = ?, project_date = ?, project_detail = ? WHERE id = ?";
-    db.query(sql, [project_name, project_date, project_detail, req.params.id], (err, result) => {
-        if (err) return res.status(500).send(err);
+    
+    db.query(sql, [project_name, project_date, project_detail, projectId], (err, result) => {
+        if (err) {
+            console.error("Update Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "ไม่พบข้อมูลโครงการที่ต้องการแก้ไข" });
+        }
+
         res.json({ message: "Success" });
     });
 });
 
-// เพิ่มสินค้าใหม่เข้าไปในโครงการ
+// 7. เพิ่มสินค้าใหม่เข้าไปในโครงการ (ใช้ตาราง withdrawal_items)
 app.post('/api/items', (req, res) => {
-    const { project_id, item_name, sn_number, quantity } = req.body;
-    const sql = "INSERT INTO items (project_id, item_name, sn_number, quantity) VALUES (?, ?, ?, ?)";
-    db.query(sql, [project_id, item_name, sn_number, quantity], (err, result) => {
-        if (err) return res.status(500).send(err);
-        res.status(201).json({ id: result.insertId });
+    // ต้องรับค่า note มาจาก Flutter ด้วย
+    const { project_id, item_name, sn_number, quantity, note } = req.body;
+    const sql = "INSERT INTO withdrawal_items (project_id, item_name, sn_number, quantity, note) VALUES (?, ?, ?, ?, ?)";
+    db.query(sql, [project_id, item_name, sn_number, quantity, note || null], (err, result) => {
+        if (err) return res.status(500).json(err);
+        res.status(201).json({ status: 'success', id: result.insertId });
     });
 });
 

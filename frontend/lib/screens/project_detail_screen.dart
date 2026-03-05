@@ -7,7 +7,11 @@ class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
   final String userName;
 
-  const ProjectDetailScreen({super.key, required this.projectId, required this.userName});
+  const ProjectDetailScreen({
+    super.key,
+    required this.projectId,
+    required this.userName,
+  });
 
   @override
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
@@ -20,8 +24,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final nameCtrl = TextEditingController();
   final detailCtrl = TextEditingController();
   DateTime selectedDate = DateTime.now();
-  
-  // เปลี่ยนโครงสร้างการเก็บข้อมูลเพื่อรองรับการ Grouping
+
+  // รายการสินค้าที่จัดกลุ่มแล้วเพื่อแสดงผล
   List<Map<String, dynamic>> groupedItems = [];
 
   @override
@@ -30,33 +34,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     fetchData();
   }
 
-  // ฟังก์ชันจัดกลุ่มสินค้าที่มีชื่อเดียวกัน
-  void groupProjectItems(List<dynamic> rawItems) {
+  // ฟังก์ชันจัดกลุ่มสินค้าที่มีชื่อเดียวกันให้อยู่ใน Card เดียวกัน
+  void _groupProjectItems(List<dynamic> rawItems) {
     Map<String, Map<String, dynamic>> tempGroup = {};
 
     for (var item in rawItems) {
       String name = item['item_name'] ?? "ไม่มีชื่อ";
       String sn = item['sn_number'] ?? "-";
       String note = item['note'] ?? "";
-      
+      String? imageUrl = item['image_url'];
+
       if (tempGroup.containsKey(name)) {
-        // ถ้ามีชื่อนี้อยู่แล้ว ให้เพิ่มจำนวน และต่อท้าย SN
         tempGroup[name]!['quantity'] += 1;
         tempGroup[name]!['sn_list'].add(sn);
-        // เก็บ ID ไว้สำหรับอ้างอิงการลบ (ในกรณีนี้จะลบตัวล่าสุดที่เจอ)
         tempGroup[name]!['ids'].add(item['id']);
       } else {
-        // ถ้ายังไม่มี ให้สร้าง Entry ใหม่
         tempGroup[name] = {
           'item_name': name,
           'quantity': 1,
           'sn_list': [sn],
           'note': note,
-          'ids': [item['id']],
+          'image_url': imageUrl,
+          'ids': [item['id']], // เก็บ ID ทั้งหมดในกลุ่มเพื่อใช้เวลาสั่งลบ
         };
       }
     }
-    
+
     setState(() {
       groupedItems = tempGroup.values.toList();
     });
@@ -65,21 +68,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> fetchData() async {
     try {
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}')
+        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}'),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          var projectData = data['project'] ?? data; 
+          var projectData = data['project'] ?? data;
           nameCtrl.text = projectData['project_name']?.toString() ?? "";
           detailCtrl.text = projectData['project_detail']?.toString() ?? "";
           if (projectData['project_date'] != null) {
             selectedDate = DateTime.parse(projectData['project_date'].toString());
           }
-          
-          // นำข้อมูลดิบไปจัดกลุ่มก่อนแสดงผล
-          groupProjectItems(data['items'] ?? []);
+
+          // จัดกลุ่มข้อมูลสินค้าก่อนแสดงผล
+          _groupProjectItems(data['items'] ?? []);
           isLoading = false;
         });
       }
@@ -108,9 +111,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       if (response.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("บันทึกข้อมูลโครงการสำเร็จ"), backgroundColor: Colors.green)
+            const SnackBar(content: Text("บันทึกข้อมูลโครงการสำเร็จ"), backgroundColor: Colors.green),
           );
-          Navigator.pop(context); 
+          Navigator.pop(context);
         }
       }
     } catch (e) {
@@ -118,73 +121,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // แก้ไขฟังก์ชันลบ: ลบสินค้าทั้งหมดภายใต้กลุ่มชื่อเดียวกัน
+  // ลบสินค้าทั้งกลุ่ม (ลบทุก ID ที่มีชื่อสินค้าเดียวกัน)
   Future<void> deleteGroupItems(List<dynamic> ids) async {
     try {
       for (var id in ids) {
         await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id'));
       }
-      fetchData(); 
+      fetchData(); // รีเฟรชข้อมูลใหม่
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.orange)
+          const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.orange),
         );
       }
     } catch (e) {
       debugPrint("Error deleting items: $e");
     }
-  }
-
-  void showAddItemDialog() {
-    final itemNameCtrl = TextEditingController();
-    final snCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("เพิ่มสินค้าใหม่", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: itemNameCtrl, decoration: const InputDecoration(labelText: "ชื่อสินค้า", prefixIcon: Icon(Icons.inventory))),
-              TextField(controller: snCtrl, decoration: const InputDecoration(labelText: "S/N Number", prefixIcon: Icon(Icons.qr_code))),
-              TextField(controller: qtyCtrl, decoration: const InputDecoration(labelText: "จำนวน", prefixIcon: Icon(Icons.numbers)), keyboardType: TextInputType.number),
-              TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: "หมายเหตุ", prefixIcon: Icon(Icons.note_add))), 
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
-          ElevatedButton(
-            onPressed: () async {
-              if (itemNameCtrl.text.isNotEmpty && qtyCtrl.text.isNotEmpty) {
-                // สำหรับหน้า Detail เราจะเพิ่มทีละรายการตาม Logic เดิมของ API คุณ
-                int qty = int.tryParse(qtyCtrl.text) ?? 1;
-                for(int i=0; i < qty; i++){
-                   await http.post(
-                    Uri.parse('http://10.0.2.2:3000/api/items'),
-                    headers: {"Content-Type": "application/json"},
-                    body: jsonEncode({
-                      "project_id": widget.projectId,
-                      "item_name": itemNameCtrl.text,
-                      "sn_number": i == 0 ? snCtrl.text : "${snCtrl.text}-$i", // ตัวอย่างการแยก SN
-                      "quantity": 1,
-                      "note": noteCtrl.text 
-                    }),
-                  );
-                }
-                fetchData();
-                if (mounted) Navigator.pop(context);
-              }
-            }, 
-            child: const Text("เพิ่ม")
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -200,125 +151,151 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           )
         ],
       ),
-      body: isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ส่วนข้อมูลโครงการ (เหมือนเดิม)
-                const Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text("ข้อมูลทั่วไป", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                TextField(controller: nameCtrl, enabled: isEditing, decoration: const InputDecoration(labelText: "ชื่อโครงการ", border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                ListTile(
-                  title: Text("วันที่: ${DateFormat('dd/MM/yyyy').format(selectedDate)}"),
-                  trailing: isEditing ? const Icon(Icons.calendar_today, color: Colors.blue) : null,
-                  onTap: isEditing ? () async {
-                    DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setState(() => selectedDate = picked);
-                  } : null,
-                ),
-                const SizedBox(height: 12),
-                TextField(controller: detailCtrl, enabled: isEditing, maxLines: 2, decoration: const InputDecoration(labelText: "รายละเอียดงาน", border: OutlineInputBorder())),
-                const Divider(height: 40, thickness: 1.2),
-                
-                // ส่วนรายการสินค้า
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    ElevatedButton.icon(
-                      onPressed: showAddItemDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text("เพิ่มสินค้า"),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                
-                // แสดงผลรายการที่ Group แล้วเหมือนหน้า Item Detail
-                groupedItems.isEmpty 
-                  ? const Center(child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey)),
-                    ))
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: groupedItems.length,
-                      itemBuilder: (context, index) {
-                        final item = groupedItems[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5), // สีพื้นหลังเทาอ่อนเหมือนในรูป
-                            borderRadius: BorderRadius.circular(15),
-                          ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text("ข้อมูลทั่วไป", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: nameCtrl,
+                    enabled: isEditing,
+                    decoration: const InputDecoration(labelText: "ชื่อโครงการ", border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    tileColor: const Color(0xFFF5F5F5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    title: Text("วันที่: ${DateFormat('dd/MM/yyyy').format(selectedDate)}"),
+                    trailing: isEditing ? const Icon(Icons.calendar_today, color: Colors.blue) : null,
+                    onTap: isEditing
+                        ? () async {
+                            DateTime? picked = await showDatePicker(
+                                context: context, initialDate: selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                            if (picked != null) setState(() => selectedDate = picked);
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: detailCtrl,
+                    enabled: isEditing,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: "รายละเอียดงาน", border: OutlineInputBorder()),
+                  ),
+                  const Divider(height: 40, thickness: 1.2),
+                  const Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 15),
+
+                  // รายการสินค้าที่จัดกลุ่มแล้ว
+                  groupedItems.isEmpty
+                      ? const Center(
                           child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "${item['item_name']} (จำนวน ${item['quantity']})",
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        "SN: ${item['sn_list'].join(', ')}",
-                                        style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                                      ),
-                                      if (item['note'].toString().isNotEmpty)
-                                        Text(
-                                          "หมายเหตุ: ${item['note']}",
-                                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text("ยืนยันการลบ"),
-                                        content: const Text("ต้องการลบกลุ่มสินค้านี้ใช่หรือไม่?"),
-                                        actions: [
-                                          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.pop(context);
-                                              deleteGroupItems(item['ids']);
-                                            }, 
-                                            child: const Text("ลบ", style: TextStyle(color: Colors.red))
+                            padding: EdgeInsets.all(20),
+                            child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey)),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: groupedItems.length,
+                          itemBuilder: (context, index) {
+                            final item = groupedItems[index];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Row(
+                                  children: [
+                                    // แสดงรูปภาพจาก Server
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: item['image_url'] != null
+                                          ? Image.network(
+                                              'http://10.0.2.2:3000${item['image_url']}',
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                  const Icon(Icons.image_not_supported, size: 40),
+                                            )
+                                          : Container(
+                                              width: 60,
+                                              height: 60,
+                                              color: Colors.blue[100],
+                                              child: const Icon(Icons.inventory_2, color: Colors.blue),
+                                            ),
+                                    ),
+                                    const SizedBox(width: 15),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "${item['item_name']} (จำนวน ${item['quantity']})",
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                           ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            "SN: ${item['sn_list'].join(', ')}",
+                                            style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                                          ),
+                                          if (item['note'].toString().isNotEmpty)
+                                            Text(
+                                              "หมายเหตุ: ${item['note']}",
+                                              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                            ),
                                         ],
                                       ),
-                                    );
-                                  },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                      onPressed: () {
+                                        _showDeleteConfirm(item['ids']);
+                                      },
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-              ],
+                              ),
+                            );
+                          },
+                        ),
+                ],
+              ),
             ),
+    );
+  }
+
+  void _showDeleteConfirm(List<dynamic> ids) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("ยืนยันการลบ"),
+        content: const Text("ต้องการลบกลุ่มสินค้านี้ออกจากการเบิกใช่หรือไม่?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              deleteGroupItems(ids);
+            },
+            child: const Text("ลบ", style: TextStyle(color: Colors.red)),
           ),
+        ],
+      ),
     );
   }
 }

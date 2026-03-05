@@ -109,4 +109,23 @@ app.post('/api/items', (req, res) => {
     });
 });
 
+// API สำหรับลบรายการสินค้ารายตัว
+app.delete('/api/items/:id', (req, res) => {
+    const itemId = req.params.id;
+    const sql = "DELETE FROM withdrawal_items WHERE id = ?";
+    
+    db.query(sql, [itemId], (err, result) => {
+        if (err) {
+            console.error("Error deleting item:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "ไม่พบรายการสินค้าที่ต้องการลบ" });
+        }
+
+        res.json({ status: 'success', message: 'ลบรายการสินค้าเรียบร้อยแล้ว' });
+    });
+});
+
 app.listen(3000, () => console.log('Backend Server running on port 3000'));

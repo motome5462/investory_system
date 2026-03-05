@@ -109,21 +109,31 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   // ลบสินค้าออกจากโครงการ
+// ฟังก์ชันลบสินค้า (Delete)
   Future<void> deleteItem(int itemId) async {
     try {
       final response = await http.delete(
-        Uri.parse('http://10.0.2.2:3000/api/items/$itemId'),
+        Uri.parse('http://10.0.2.2:3000/api/items/$itemId'), // ส่ง ID ไปที่ API
       );
+
       if (response.statusCode == 200) {
+        // เมื่อลบสำเร็จในฐานข้อมูล ให้รีเฟรชข้อมูลหน้าจอใหม่
         fetchData(); 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("ลบรายการสินค้าแล้ว"))
+            const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.orange)
           );
         }
+      } else {
+        throw "ลบไม่สำเร็จ รหัส: ${response.statusCode}";
       }
     } catch (e) {
       debugPrint("Error deleting item: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("เกิดข้อผิดพลาดในการลบ: $e"), backgroundColor: Colors.red)
+        );
+      }
     }
   }
 

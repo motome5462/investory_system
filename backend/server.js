@@ -50,4 +50,13 @@ app.post('/api/items', (req, res) => {
     });
 });
 
+// API สำหรับดึงโครงการทั้งหมดมาแสดงที่หน้า Home
+app.get('/api/projects', (req, res) => {
+    const sql = "SELECT * FROM projects ORDER BY created_at DESC";
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results);
+    });
+});
+
 app.listen(3000, () => console.log('Backend Server running on port 3000'));

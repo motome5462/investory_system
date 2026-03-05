@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart'; // เพิ่มไฟล์หน้า Dashboard
-import 'screens/project_info_screen.dart';
 
 void main() {
   runApp(const InventoryApp());

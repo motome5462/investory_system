@@ -59,4 +59,29 @@ app.get('/api/projects', (req, res) => {
     });
 });
 
+// 1. ดึงข้อมูลโครงการและรายการสินค้า
+app.get('/api/projects/:id', (req, res) => {
+    const projectId = req.params.id;
+    const sqlProject = "SELECT * FROM projects WHERE id = ?";
+    const sqlItems = "SELECT * FROM items WHERE project_id = ?";
+
+    db.query(sqlProject, [projectId], (err, projectResult) => {
+        if (err) return res.status(500).send(err);
+        db.query(sqlItems, [projectId], (err, itemsResult) => {
+            if (err) return res.status(500).send(err);
+            res.json({ project: projectResult[0], items: itemsResult });
+        });
+    });
+});
+
+// 2. อัปเดตข้อมูลโครงการ (ใช้ PUT)
+app.put('/api/projects/:id', (req, res) => {
+    const { project_name, project_date, project_detail } = req.body;
+    const sql = "UPDATE projects SET project_name = ?, project_date = ?, project_detail = ? WHERE id = ?";
+    db.query(sql, [project_name, project_date, project_detail, req.params.id], (err, result) => {
+        if (err) return res.status(500).send(err);
+        res.json({ message: "Updated successfully" });
+    });
+});
+
 app.listen(3000, () => console.log('Backend Server running on port 3000'));

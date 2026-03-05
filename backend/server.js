@@ -1,6 +1,8 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -127,5 +129,36 @@ app.delete('/api/items/:id', (req, res) => {
         res.json({ status: 'success', message: 'ลบรายการสินค้าเรียบร้อยแล้ว' });
     });
 });
+
+// ตั้งค่าที่เก็บรูปภาพ
+const storage = multer.diskStorage({
+    destination: './uploads/',
+    filename: function(req, file, cb) {
+        cb(null, 'item-' + Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
+
+// API บันทึกสินค้า พร้อมรับไฟล์รูปภาพ
+app.post('/api/items', upload.single('image'), (req, res) => {
+    const { project_id, item_name, quantity, sn_numbers, note } = req.body;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    // แปลง sn_numbers จาก JSON string กลับเป็น array
+    const sns = JSON.parse(sn_numbers);
+
+    // วนลูปบันทึกตามจำนวน SN (หรือบันทึกก้อนเดียวตาม Logic ของคุณ)
+    // ตัวอย่างการบันทึกเข้าฐานข้อมูล:
+    const sql = "INSERT INTO withdrawal_items (project_id, item_name, quantity, sn_number, note, image_url) VALUES ?";
+    const values = sns.map(sn => [project_id, item_name, 1, sn, note, image_url]);
+
+    db.query(sql, [values], (err, result) => {
+        if (err) return res.status(500).json(err);
+        res.json({ status: 'success' });
+    });
+});
+
+// เปิดให้เข้าถึงโฟลเดอร์รูปภาพได้
+app.use('/uploads', express.static('uploads'));
 
 app.listen(3000, () => console.log('Backend Server running on port 3000'));

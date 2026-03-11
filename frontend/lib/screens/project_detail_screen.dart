@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io'; 
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart'; 
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -25,7 +27,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final detailCtrl = TextEditingController();
   DateTime selectedDate = DateTime.now();
 
-  // รายการสินค้าที่จัดกลุ่มแล้วเพื่อแสดงผล
   List<Map<String, dynamic>> groupedItems = [];
 
   @override
@@ -34,15 +35,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     fetchData();
   }
 
-  // ฟังก์ชันจัดกลุ่มสินค้าที่มีชื่อเดียวกันให้อยู่ใน Card เดียวกัน (Grouping Logic)
+  // --- ฟังก์ชันดึงข้อมูลและจัดกลุ่ม ---
   void _groupProjectItems(List<dynamic> rawItems) {
     Map<String, Map<String, dynamic>> tempGroup = {};
-
     for (var item in rawItems) {
       String name = item['item_name'] ?? "ไม่มีชื่อ";
       String sn = item['sn_number'] ?? "-";
       String note = item['note'] ?? "";
-      String? imageUrl = item['image_url']; // รับ URL รูปภาพจากฐานข้อมูล
+      String? imageUrl = item['image_url'];
 
       if (tempGroup.containsKey(name)) {
         tempGroup[name]!['quantity'] += 1;
@@ -55,14 +55,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           'sn_list': [sn],
           'note': note,
           'image_url': imageUrl,
-          'ids': [item['id']], // เก็บ ID ทั้งหมดเพื่อใช้เวลาสั่งลบ
+          'ids': [item['id']],
         };
       }
     }
-
-    setState(() {
-      groupedItems = tempGroup.values.toList();
-    });
+    setState(() { groupedItems = tempGroup.values.toList(); });
   }
 
   Future<void> fetchData() async {
@@ -80,8 +77,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           if (projectData['project_date'] != null) {
             selectedDate = DateTime.parse(projectData['project_date'].toString());
           }
-
-          // จัดกลุ่มข้อมูลสินค้าก่อนแสดงผล
           _groupProjectItems(data['items'] ?? []);
           isLoading = false;
         });
@@ -89,55 +84,139 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("โหลดข้อมูลไม่สำเร็จ: $e"), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
   }
 
-  Future<void> updateProject() async {
-    try {
-      final response = await http.put(
-        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "project_name": nameCtrl.text,
-          "project_date": DateFormat('yyyy-MM-dd').format(selectedDate),
-          "project_detail": detailCtrl.text,
-        }),
-      );
+  // --- ฟังก์ชันแสดง Dialog เพิ่มสินค้าพร้อมช่อง S/N ไดนามิก ---
+  void _showAddItemDialog() {
+    final itemCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    
+    // สร้าง List เพื่อเก็บ Controller สำหรับช่อง S/N หลายช่อง
+    List<TextEditingController> snControllers = [TextEditingController()];
+    
+    File? tempImage;
+    final picker = ImagePicker();
 
-      if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("บันทึกข้อมูลโครงการสำเร็จ"), backgroundColor: Colors.green),
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          
+          // ฟังก์ชันจัดการเพิ่ม/ลดช่องกรอก SN ตามจำนวนที่ระบุ
+          void onQtyChanged(String value) {
+            int count = int.tryParse(value) ?? 1;
+            if (count < 1) count = 1;
+            if (count > 50) count = 50; // ป้องกันการใส่จำนวนมากเกินไปจนค้าง
+
+            setDialogState(() {
+              if (snControllers.length < count) {
+                for (int i = snControllers.length; i < count; i++) {
+                  snControllers.add(TextEditingController());
+                }
+              } else if (snControllers.length > count) {
+                for (int i = snControllers.length - 1; i >= count; i--) {
+                  snControllers[i].dispose();
+                  snControllers.removeAt(i);
+                }
+              }
+            });
+          }
+
+          return AlertDialog(
+            title: const Text("เพิ่มสินค้าเข้าโครงการ", style: TextStyle(fontWeight: FontWeight.bold)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+                        if (pickedFile != null) {
+                          setDialogState(() => tempImage = File(pickedFile.path));
+                        }
+                      },
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: tempImage != null ? FileImage(tempImage!) : null,
+                        child: tempImage == null ? const Icon(Icons.camera_alt, size: 30) : null,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    TextField(controller: itemCtrl, decoration: const InputDecoration(labelText: "ชื่อสินค้า", border: OutlineInputBorder())),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: qtyCtrl, 
+                      decoration: const InputDecoration(labelText: "จำนวน", border: OutlineInputBorder(), hintText: "ระบุจำนวนเพื่อสร้างช่อง SN"), 
+                      keyboardType: TextInputType.number,
+                      onChanged: onQtyChanged, // ตรวจจับการเปลี่ยนค่าจำนวน
+                    ),
+                    const SizedBox(height: 15),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text("ระบุ Serial Number (SN):", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    ),
+                    const SizedBox(height: 5),
+                    // วนลูปสร้างช่องกรอกตามจำนวน Controller ที่มี
+                    ...List.generate(snControllers.length, (index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: TextField(
+                        controller: snControllers[index], 
+                        decoration: InputDecoration(
+                          labelText: "SN ชิ้นที่ ${index + 1}", 
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+                        )
+                      ),
+                    )),
+                    const SizedBox(height: 10),
+                    TextField(controller: noteCtrl, decoration: const InputDecoration(labelText: "หมายเหตุ", border: OutlineInputBorder())),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+              ElevatedButton(
+                onPressed: () async {
+                  if (itemCtrl.text.isEmpty || qtyCtrl.text.isEmpty) return;
+                  
+                  // รวบรวมค่า SN จากทุกช่อง
+                  List<String> sns = snControllers.map((c) => c.text.isEmpty ? "-" : c.text).toList();
+
+                  var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:3000/api/items'));
+                  request.fields['project_id'] = widget.projectId.toString();
+                  request.fields['item_name'] = itemCtrl.text;
+                  request.fields['quantity'] = qtyCtrl.text;
+                  request.fields['note'] = noteCtrl.text;
+                  request.fields['sn_numbers'] = jsonEncode(sns);
+
+                  if (tempImage != null) {
+                    request.files.add(await http.MultipartFile.fromPath('image', tempImage!.path));
+                  }
+
+                  var response = await request.send();
+                  if (response.statusCode == 201 || response.statusCode == 200) {
+                    Navigator.pop(context);
+                    fetchData(); 
+                  }
+                },
+                child: const Text("เพิ่มสินค้า"),
+              ),
+            ],
           );
-          Navigator.pop(context); // กลับไปหน้าแรก (Home)
         }
-      }
-    } catch (e) {
-      debugPrint("Error updating project: $e");
-    }
+      ),
+    );
   }
 
-  // ลบสินค้าทั้งกลุ่ม (วนลูปส่ง Request ตามรายการ ID)
-  Future<void> deleteGroupItems(List<dynamic> ids) async {
-    try {
-      for (var id in ids) {
-        await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id'));
-      }
-      fetchData(); // รีเฟรชข้อมูลใหม่หลังจากลบ
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.orange),
-        );
-      }
-    } catch (e) {
-      debugPrint("Error deleting items: $e");
-    }
-  }
-
+  // --- ส่วน UI หลัก ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,7 +226,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         actions: [
           IconButton(
             icon: Icon(isEditing ? Icons.save : Icons.edit),
-            onPressed: () => isEditing ? updateProject() : setState(() => isEditing = true),
+            onPressed: () => isEditing ? _updateProject() : setState(() => isEditing = true),
           )
         ],
       ),
@@ -166,43 +245,46 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 15),
-                  TextField(
-                    controller: nameCtrl,
-                    enabled: isEditing,
-                    decoration: const InputDecoration(labelText: "ชื่อโครงการ", border: OutlineInputBorder()),
-                  ),
+                  TextField(controller: nameCtrl, enabled: isEditing, decoration: const InputDecoration(labelText: "ชื่อโครงการ", border: OutlineInputBorder())),
                   const SizedBox(height: 12),
                   ListTile(
                     tileColor: const Color(0xFFF5F5F5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     title: Text("วันที่: ${DateFormat('dd/MM/yyyy').format(selectedDate)}"),
                     trailing: isEditing ? const Icon(Icons.calendar_today, color: Colors.blue) : null,
-                    onTap: isEditing
-                        ? () async {
-                            DateTime? picked = await showDatePicker(
-                                context: context, initialDate: selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                            if (picked != null) setState(() => selectedDate = picked);
-                          }
-                        : null,
+                    onTap: isEditing ? () async {
+                      DateTime? picked = await showDatePicker(
+                        context: context, 
+                        initialDate: selectedDate, 
+                        firstDate: DateTime(2000), 
+                        lastDate: DateTime(2100)
+                      );
+                      if (picked != null) setState(() => selectedDate = picked);
+                    } : null,
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: detailCtrl,
-                    enabled: isEditing,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: "รายละเอียดงาน", border: OutlineInputBorder()),
-                  ),
+                  TextField(controller: detailCtrl, enabled: isEditing, maxLines: 2, decoration: const InputDecoration(labelText: "รายละเอียดงาน", border: OutlineInputBorder())),
                   const Divider(height: 40, thickness: 1.2),
-                  const Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("รายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      ElevatedButton.icon(
+                        onPressed: _showAddItemDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text("เพิ่มสินค้า"),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 15),
 
                   groupedItems.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey)),
-                          ),
-                        )
+                      ? const Center(child: Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Text("ไม่พบรายการสินค้าในโครงการนี้", style: TextStyle(color: Colors.grey)),
+                      ))
                       : ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -212,61 +294,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF5F5F5),
+                                color: const Color(0xFFF5F5F5), 
                                 borderRadius: BorderRadius.circular(15),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 5,
+                                    offset: const Offset(0, 2)
+                                  )
+                                ]
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  children: [
-                                    // แก้ไขจุดติดขัด: แสดงรูปภาพโดยใช้ URL เต็มจาก Server
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: item['image_url'] != null
-                                          ? Image.network(
-                                              'http://10.0.2.2:3000${item['image_url']}',
-                                              width: 60,
-                                              height: 60,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) =>
-                                                  const Icon(Icons.image_not_supported, size: 40),
-                                            )
-                                          : Container(
-                                              width: 60,
-                                              height: 60,
-                                              color: Colors.blue[100],
-                                              child: const Icon(Icons.inventory_2, color: Colors.blue),
-                                            ),
-                                    ),
-                                    const SizedBox(width: 15),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "${item['item_name']} (จำนวน ${item['quantity']})",
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            "SN: ${item['sn_list'].join(', ')}",
-                                            style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                                          ),
-                                          if (item['note'].toString().isNotEmpty)
-                                            Text(
-                                              "หมายเหตุ: ${item['note']}",
-                                              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                      onPressed: () {
-                                        _showDeleteConfirm(item['ids']);
-                                      },
-                                    ),
-                                  ],
+                              child: ListTile(
+                                leading: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: item['image_url'] != null
+                                      ? Image.network(
+                                          'http://10.0.2.2:3000${item['image_url']}', 
+                                          width: 50, height: 50, fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.inventory_2),
+                                        )
+                                      : const Icon(Icons.inventory_2),
+                                ),
+                                title: Text("${item['item_name']} (จำนวน ${item['quantity']})", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                subtitle: Text("SN: ${item['sn_list'].join(', ')}"),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red), 
+                                  onPressed: () => _deleteGroupItems(item['ids'])
                                 ),
                               ),
                             );
@@ -278,23 +331,47 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  void _showDeleteConfirm(List<dynamic> ids) {
-    showDialog(
+  // --- ฟังก์ชันอัปเดตโครงการ ---
+  Future<void> _updateProject() async {
+    try {
+      final response = await http.put(
+        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "project_name": nameCtrl.text,
+          "project_date": DateFormat('yyyy-MM-dd').format(selectedDate),
+          "project_detail": detailCtrl.text,
+        }),
+      );
+      if (response.statusCode == 200) {
+        setState(() => isEditing = false);
+        fetchData();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("อัปเดตข้อมูลโครงการสำเร็จ")));
+      }
+    } catch (e) {
+       debugPrint("Update error: $e");
+    }
+  }
+
+  // --- ฟังก์ชันลบรายการสินค้า ---
+  Future<void> _deleteGroupItems(List<dynamic> ids) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("ยืนยันการลบ"),
-        content: const Text("ต้องการลบกลุ่มสินค้านี้ออกจากการเบิกใช่หรือไม่?"),
+        content: const Text("คุณต้องการลบรายการสินค้าเหล่านี้ใช่หรือไม่?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              deleteGroupItems(ids);
-            },
-            child: const Text("ลบ", style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ยกเลิก")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("ลบ", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
+
+    if (confirm == true) {
+      for (var id in ids) { 
+        await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id')); 
+      }
+      fetchData();
+    }
   }
 }

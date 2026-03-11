@@ -1,31 +1,43 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/screens/login_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'project_info_screen.dart';
-import 'project_detail_screen.dart'; // อย่าลืมสร้างและ import ไฟล์นี้
 import 'package:intl/intl.dart';
+// Import หน้าที่เกี่ยวข้อง
+import 'login_screen.dart';
+import 'project_info_screen.dart';
+import 'project_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
-  const HomeScreen({super.key, required this.userName});
+  final int userId; // เพิ่ม userId เพื่อรองรับ Constructor ใหม่ของ ProjectInfoScreen
+
+  const HomeScreen({
+    super.key, 
+    required this.userName, 
+    required this.userId,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  
   // ฟังก์ชันดึงข้อมูลโครงการจาก API
   Future<List<dynamic>> fetchProjects() async {
-    final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/projects'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load projects');
+    try {
+      final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/projects'));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load projects');
+      }
+    } catch (e) {
+      throw Exception('การเชื่อมต่อล้มเหลว: $e');
     }
   }
 
-  // ฟังก์ชันจัดรูปแบบวันที่จาก DB ให้เป็น dd/MM/yyyy
+  // ฟังก์ชันจัดรูปแบบวันที่
   String formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return '-';
     try {
@@ -36,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ฟังก์ชันจัดรูปแบบเวลา (ตัดวินาทีออก)
+  // ฟังก์ชันจัดรูปแบบเวลา
   String formatTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return '-';
     if (timeStr.contains(':') && timeStr.length >= 5) {
@@ -51,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text("รายการโครงการ"),
         centerTitle: true,
+        elevation: 2,
       ),
       drawer: Drawer(
         child: Column(
@@ -104,66 +117,62 @@ class _HomeScreenState extends State<HomeScreen> {
               setState(() {});
             },
             child: ListView.builder(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
                 var project = snapshot.data![index];
                 return Card(
-                  elevation: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 3,
+                  margin: const EdgeInsets.only(bottom: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: const CircleAvatar(
-                      backgroundColor: Colors.blue,
-                      child: Icon(Icons.business, color: Colors.white),
+                    contentPadding: const EdgeInsets.all(15),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.business_center, color: Colors.blue, size: 30),
                     ),
                     title: Text(
                       project['project_name'] ?? 'ไม่มีชื่อโครงการ',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 14, color: Colors.blueGrey),
-                            const SizedBox(width: 6),
+                            const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                            const SizedBox(width: 8),
                             Text("วันที่: ${formatDate(project['project_date'])}"),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                         Row(
                           children: [
-                            const Icon(Icons.access_time, size: 14, color: Colors.blueGrey),
-                            const SizedBox(width: 6),
-                            Text("เวลา: ${formatTime(project['project_time'])} น."),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.person_outline, size: 14, color: Colors.blueGrey),
-                            const SizedBox(width: 6),
+                            const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+                            const SizedBox(width: 8),
                             Text("ผู้บันทึก: ${project['full_name'] ?? widget.userName}"),
                           ],
                         ),
                       ],
                     ),
                     trailing: const Icon(Icons.chevron_right, color: Colors.blue),
-// ใน HomeScreen.dart
-onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ProjectDetailScreen(
-        projectId: project['id'], // ตรวจสอบชื่อคีย์ id ให้ตรงกับในภาพ image_92fe5c.png
-        userName: widget.userName,
-      ),
-    ),
-  );
-}
+                    onTap: () {
+                      // ส่ง projectId ไปยังหน้าแสดงรายละเอียด
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProjectDetailScreen(
+                            projectId: project['id'], 
+                            userName: widget.userName,
+                          ),
+                        ),
+                      ).then((_) => setState(() {})); // รีเฟรชหน้า Home เมื่อกลับมา
+                    },
                   ),
                 );
               },
@@ -173,9 +182,15 @@ onTap: () {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
+          // แก้ไขจุดนี้: ส่ง userId ไปด้วยเพื่อให้ ProjectInfoScreen ทำงานได้
           await Navigator.push(
             context, 
-            MaterialPageRoute(builder: (context) => ProjectInfoScreen(userName: widget.userName))
+            MaterialPageRoute(
+              builder: (context) => ProjectInfoScreen(
+                userName: widget.userName,
+                userId: widget.userId,
+              ),
+            ),
           );
           setState(() {}); 
         },

@@ -34,7 +34,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     fetchData();
   }
 
-  // ฟังก์ชันจัดกลุ่มสินค้าที่มีชื่อเดียวกันให้อยู่ใน Card เดียวกัน
+  // ฟังก์ชันจัดกลุ่มสินค้าที่มีชื่อเดียวกันให้อยู่ใน Card เดียวกัน (Grouping Logic)
   void _groupProjectItems(List<dynamic> rawItems) {
     Map<String, Map<String, dynamic>> tempGroup = {};
 
@@ -42,7 +42,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       String name = item['item_name'] ?? "ไม่มีชื่อ";
       String sn = item['sn_number'] ?? "-";
       String note = item['note'] ?? "";
-      String? imageUrl = item['image_url'];
+      String? imageUrl = item['image_url']; // รับ URL รูปภาพจากฐานข้อมูล
 
       if (tempGroup.containsKey(name)) {
         tempGroup[name]!['quantity'] += 1;
@@ -55,7 +55,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           'sn_list': [sn],
           'note': note,
           'image_url': imageUrl,
-          'ids': [item['id']], // เก็บ ID ทั้งหมดในกลุ่มเพื่อใช้เวลาสั่งลบ
+          'ids': [item['id']], // เก็บ ID ทั้งหมดเพื่อใช้เวลาสั่งลบ
         };
       }
     }
@@ -113,7 +113,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("บันทึกข้อมูลโครงการสำเร็จ"), backgroundColor: Colors.green),
           );
-          Navigator.pop(context);
+          Navigator.pop(context); // กลับไปหน้าแรก (Home)
         }
       }
     } catch (e) {
@@ -121,13 +121,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // ลบสินค้าทั้งกลุ่ม (ลบทุก ID ที่มีชื่อสินค้าเดียวกัน)
+  // ลบสินค้าทั้งกลุ่ม (วนลูปส่ง Request ตามรายการ ID)
   Future<void> deleteGroupItems(List<dynamic> ids) async {
     try {
       for (var id in ids) {
         await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id'));
       }
-      fetchData(); // รีเฟรชข้อมูลใหม่
+      fetchData(); // รีเฟรชข้อมูลใหม่หลังจากลบ
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.orange),
@@ -196,7 +196,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   const Text("รายการสินค้าในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 15),
 
-                  // รายการสินค้าที่จัดกลุ่มแล้ว
                   groupedItems.isEmpty
                       ? const Center(
                           child: Padding(
@@ -220,7 +219,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 padding: const EdgeInsets.all(16.0),
                                 child: Row(
                                   children: [
-                                    // แสดงรูปภาพจาก Server
+                                    // แก้ไขจุดติดขัด: แสดงรูปภาพโดยใช้ URL เต็มจาก Server
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
                                       child: item['image_url'] != null

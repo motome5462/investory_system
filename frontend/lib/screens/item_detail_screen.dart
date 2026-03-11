@@ -98,57 +98,28 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   // ส่งข้อมูลทั้งหมดไปยัง Backend (MultipartRequest)
-  Future<void> saveAll() async {
-    if (itemsList.isEmpty) return;
+Future<void> saveAll() async {
+  if (itemsList.isEmpty) return;
+  try {
+    for (var item in itemsList) {
+      var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:3000/api/items'));
+      
+      // ข้อมูลต้องเป็น String ทั้งหมด
+      request.fields['project_id'] = widget.projectId.toString();
+      request.fields['item_name'] = item['item_name'].toString();
+      request.fields['quantity'] = item['quantity'].toString();
+      request.fields['sn_numbers'] = jsonEncode(item['sn_list']); // ส่งเป็น JSON String
+      request.fields['note'] = item['note'] ?? "";
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      for (var item in itemsList) {
-        // ใช้ MultipartRequest เพื่อส่งไฟล์และฟิลด์ข้อความพร้อมกัน
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('http://10.0.2.2:3000/api/items'), // ใช้ 10.0.2.2 สำหรับ Emulator Android
-        );
-
-        // ใส่ข้อมูลลงใน Fields (ทุกอย่างต้องเป็น String)
-        request.fields['project_id'] = widget.projectId.toString();
-        request.fields['item_name'] = item['item_name'].toString();
-        request.fields['quantity'] = item['quantity'].toString();
-        request.fields['note'] = item['note'] ?? "";
-        
-        // แปลง List ของ SN ให้เป็น JSON String เพื่อให้ Backend ใช้ JSON.parse ได้
-        request.fields['sn_numbers'] = jsonEncode(item['sn_list']);
-
-        // ถ้ามีรูปภาพ ให้แนบไฟล์ไปด้วย
-        if (item['image_file'] != null) {
-          request.files.add(await http.MultipartFile.fromPath(
-            'image', // ชื่อต้องตรงกับ upload.single('image') ใน server.js
-            item['image_file'].path,
-          ));
-        }
-
-        var streamedResponse = await request.send();
-        var response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode != 200 && response.statusCode != 201) {
-          debugPrint("บันทึกไม่สำเร็จ: ${response.body}");
-        }
+      if (item['image_file'] != null) {
+        request.files.add(await http.MultipartFile.fromPath(
+          'image', // ชื่อต้องตรงกับ upload.single('image') ใน Backend
+          item['image_file'].path,
+        ));
       }
-
-      if (!mounted) return;
-      Navigator.pop(context); // ปิด Loading
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("บันทึกข้อมูลเรียบร้อยแล้ว"), backgroundColor: Colors.green),
-      );
-      
-      // กลับไปหน้าก่อนหน้า
-      Navigator.pop(context);
+      await request.send();
+    }
+    Navigator.popUntil(context, (route) => route.isFirst);
     } catch (e) {
       Navigator.pop(context); // ปิด Loading
       debugPrint("Error saving items: $e");

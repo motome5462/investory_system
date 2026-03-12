@@ -10,13 +10,13 @@ app.use(cors());
 app.use(express.json());
 
 // สร้างโฟลเดอร์ uploads หากยังไม่มี
-const uploadDir = './uploads';
+const uploadDir = './uploadsimages';
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
 }
 
 // เปิดให้เข้าถึงรูปภาพผ่าน URL
-app.use('/uploads', express.static('uploads'));
+app.use('/uploadsimages', express.static('uploadsimages'));
 
 // เชื่อมต่อ MySQL
 const db = mysql.createConnection({
@@ -33,7 +33,7 @@ db.connect(err => {
 
 // ตั้งค่า Multer
 const storage = multer.diskStorage({
-    destination: './uploads/',
+    destination: './uploadsimages/',
     filename: function(req, file, cb) {
         cb(null, 'item-' + Date.now() + path.extname(file.originalname));
     }
@@ -98,7 +98,7 @@ app.post('/api/items', upload.single('image'), (req, res) => {
         const { project_id, item_name, sn_numbers, note } = req.body;
         if (!project_id || !sn_numbers) return res.status(400).json({ message: "ข้อมูลไม่ครบถ้วน" });
 
-        const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+        const image_url = req.file ? `/uploadsimages/${req.file.filename}` : null;
         const sns = JSON.parse(sn_numbers); // แปลง JSON string เป็น Array
 
         const sql = "INSERT INTO withdrawal_items (project_id, item_name, quantity, sn_number, note, image_url) VALUES ?";

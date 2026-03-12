@@ -89,6 +89,37 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
+  // --- ฟังก์ชันแสดงรูปภาพขนาดใหญ่ (Preview) ---
+  void _showImagePreview(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Image.network(
+                'http://10.0.2.2:3000$imageUrl',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => 
+                    const Icon(Icons.image_not_supported, size: 100, color: Colors.white),
+              ),
+            ),
+            IconButton(
+              icon: const CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, color: Colors.white),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- ฟังก์ชันแสดง Dialog เพิ่มสินค้าพร้อมช่อง S/N ไดนามิก ---
   void _showAddItemDialog() {
     final itemCtrl = TextEditingController();
@@ -106,11 +137,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           
-          // ฟังก์ชันจัดการเพิ่ม/ลดช่องกรอก SN ตามจำนวนที่ระบุ
           void onQtyChanged(String value) {
             int count = int.tryParse(value) ?? 1;
             if (count < 1) count = 1;
-            if (count > 50) count = 50; // ป้องกันการใส่จำนวนมากเกินไปจนค้าง
+            if (count > 50) count = 50; 
 
             setDialogState(() {
               if (snControllers.length < count) {
@@ -155,7 +185,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       controller: qtyCtrl, 
                       decoration: const InputDecoration(labelText: "จำนวน", border: OutlineInputBorder(), hintText: "ระบุจำนวนเพื่อสร้างช่อง SN"), 
                       keyboardType: TextInputType.number,
-                      onChanged: onQtyChanged, // ตรวจจับการเปลี่ยนค่าจำนวน
+                      onChanged: onQtyChanged, 
                     ),
                     const SizedBox(height: 15),
                     const Align(
@@ -163,7 +193,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       child: Text("ระบุ Serial Number (SN):", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
                     ),
                     const SizedBox(height: 5),
-                    // วนลูปสร้างช่องกรอกตามจำนวน Controller ที่มี
                     ...List.generate(snControllers.length, (index) => Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: TextField(
@@ -187,7 +216,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 onPressed: () async {
                   if (itemCtrl.text.isEmpty || qtyCtrl.text.isEmpty) return;
                   
-                  // รวบรวมค่า SN จากทุกช่อง
                   List<String> sns = snControllers.map((c) => c.text.isEmpty ? "-" : c.text).toList();
 
                   var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:3000/api/items'));
@@ -216,7 +244,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // --- ส่วน UI หลัก ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -305,15 +332,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 ]
                               ),
                               child: ListTile(
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: item['image_url'] != null
-                                      ? Image.network(
-                                          'http://10.0.2.2:3000${item['image_url']}', 
-                                          width: 50, height: 50, fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.inventory_2),
-                                        )
-                                      : const Icon(Icons.inventory_2),
+                                leading: GestureDetector(
+                                  onTap: () {
+                                    if (item['image_url'] != null) {
+                                      _showImagePreview(item['image_url']);
+                                    }
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: item['image_url'] != null
+                                        ? Image.network(
+                                            'http://10.0.2.2:3000${item['image_url']}', 
+                                            width: 50, height: 50, fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.inventory_2),
+                                          )
+                                        : const Icon(Icons.inventory_2),
+                                  ),
                                 ),
                                 title: Text("${item['item_name']} (จำนวน ${item['quantity']})", style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Text("SN: ${item['sn_list'].join(', ')}"),
@@ -331,7 +365,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // --- ฟังก์ชันอัปเดตโครงการ ---
   Future<void> _updateProject() async {
     try {
       final response = await http.put(
@@ -353,7 +386,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // --- ฟังก์ชันลบรายการสินค้า ---
   Future<void> _deleteGroupItems(List<dynamic> ids) async {
     final confirm = await showDialog<bool>(
       context: context,

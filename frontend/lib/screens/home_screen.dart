@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
-// Import หน้าที่เกี่ยวข้อง
 import 'login_screen.dart';
 import 'project_info_screen.dart';
 import 'project_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
-  final int userId; // เพิ่ม userId เพื่อรองรับ Constructor ใหม่ของ ProjectInfoScreen
+  final int userId;
 
   const HomeScreen({
-    super.key, 
-    required this.userName, 
+    super.key,
+    required this.userName,
     required this.userId,
   });
 
@@ -22,8 +21,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  
-  // ฟังก์ชันดึงข้อมูลโครงการจาก API
   Future<List<dynamic>> fetchProjects() async {
     try {
       final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/projects'));
@@ -37,18 +34,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ฟังก์ชันจัดรูปแบบวันที่
   String formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return '-';
     try {
       DateTime dateTime = DateTime.parse(dateStr);
-      return DateFormat('dd/MM/yyyy').format(dateTime);
+      return DateFormat('dd MMM yyyy').format(dateTime);
     } catch (e) {
       return dateStr;
     }
   }
 
-  // ฟังก์ชันจัดรูปแบบเวลา
   String formatTime(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return '-';
     if (timeStr.contains(':') && timeStr.length >= 5) {
@@ -60,25 +55,52 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC), // พื้นหลังเทาอ่อนสะอาดตา
       appBar: AppBar(
-        title: const Text("รายการโครงการ"),
+        title: const Text(
+          "Project Dashboard",
+          style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
-        elevation: 2,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF1E293B)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () {},
+          )
+        ],
       ),
       drawer: Drawer(
         child: Column(
           children: [
             UserAccountsDrawerHeader(
-              accountName: Text(widget.userName),
-              accountEmail: const Text("เจ้าหน้าที่บันทึกข้อมูล"),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade800, Colors.blue.shade500],
+                ),
+              ),
+              accountName: Text(
+                widget.userName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              accountEmail: const Text("Staff Member"),
               currentAccountPicture: const CircleAvatar(
                 backgroundColor: Colors.white,
-                child: Icon(Icons.person, size: 40, color: Colors.blue),
+                child: Icon(Icons.person, size: 45, color: Colors.blue),
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text("ออกจากระบบ"),
+              leading: const Icon(Icons.dashboard_rounded),
+              title: const Text("Dashboard"),
+              onTap: () => Navigator.pop(context),
+            ),
+            const Spacer(),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+              title: const Text("Sign Out", style: TextStyle(color: Colors.redAccent)),
               onTap: () {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -87,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -96,85 +119,19 @@ class _HomeScreenState extends State<HomeScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text("เกิดข้อผิดพลาด: ${snapshot.error}"));
+            return _buildErrorState(snapshot.error.toString());
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.assignment_late_outlined, size: 100, color: Colors.grey),
-                  const SizedBox(height: 10),
-                  Text("สวัสดีคุณ ${widget.userName}", 
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Text("ยังไม่มีโครงการในระบบ กดปุ่มด้านล่างเพื่อเพิ่ม"),
-                ],
-              ),
-            );
+            return _buildEmptyState();
           }
 
           return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {});
-            },
+            onRefresh: () async => setState(() {}),
             child: ListView.builder(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
                 var project = snapshot.data![index];
-                return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.only(bottom: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(15),
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.business_center, color: Colors.blue, size: 30),
-                    ),
-                    title: Text(
-                      project['project_name'] ?? 'ไม่มีชื่อโครงการ',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                            const SizedBox(width: 8),
-                            Text("วันที่: ${formatDate(project['project_date'])}"),
-                          ],
-                        ),
-                        const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                            const SizedBox(width: 8),
-                            Text("ผู้บันทึก: ${project['full_name'] ?? widget.userName}"),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.blue),
-                    onTap: () {
-                      // ส่ง projectId ไปยังหน้าแสดงรายละเอียด
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ProjectDetailScreen(
-                            projectId: project['id'], 
-                            userName: widget.userName,
-                          ),
-                        ),
-                      ).then((_) => setState(() {})); // รีเฟรชหน้า Home เมื่อกลับมา
-                    },
-                  ),
-                );
+                return _buildProjectCard(project);
               },
             ),
           );
@@ -182,9 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // แก้ไขจุดนี้: ส่ง userId ไปด้วยเพื่อให้ ProjectInfoScreen ทำงานได้
           await Navigator.push(
-            context, 
+            context,
             MaterialPageRoute(
               builder: (context) => ProjectInfoScreen(
                 userName: widget.userName,
@@ -192,11 +148,153 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           );
-          setState(() {}); 
+          setState(() {});
         },
-        label: const Text("เพิ่มโครงการใหม่"),
+        label: const Text("New Project", style: TextStyle(fontWeight: FontWeight.bold)),
         icon: const Icon(Icons.add),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.blue.shade700,
+        elevation: 4,
+      ),
+    );
+  }
+
+  Widget _buildProjectCard(dynamic project) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectDetailScreen(
+                  projectId: project['id'],
+                  userName: widget.userName,
+                ),
+              ),
+            ).then((_) => setState(() {}));
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Icon ตกแต่งด้านซ้าย
+                Container(
+                  width: 55,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(Icons.folder_rounded, color: Colors.blue.shade600, size: 28),
+                ),
+                const SizedBox(width: 16),
+                // ข้อมูลโครงการ
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        project['project_name'] ?? 'Untitled Project',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Color(0xFF1E293B),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_month_rounded, size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            formatDate(project['project_date']),
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                          const SizedBox(width: 12),
+                          Icon(Icons.person_rounded, size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              project['full_name'] ?? widget.userName,
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 18, color: Color(0xFFCBD5E1)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.network(
+            'https://cdn-icons-png.flaticon.com/512/4076/4076432.png', // ภาพประกอบ Empty State
+            width: 180,
+            opacity: const AlwaysStoppedAnimation(0.5),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "Hello, ${widget.userName}!",
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "No projects found. Tap '+' to create one.",
+            style: TextStyle(color: Colors.grey, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 80, color: Colors.redAccent),
+            const SizedBox(height: 16),
+            const Text("Connection Error", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(error, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => setState(() {}),
+              child: const Text("Try Again"),
+            )
+          ],
+        ),
       ),
     );
   }

@@ -13,13 +13,16 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final userCtrl = TextEditingController();
   final passCtrl = TextEditingController();
-  bool _isLoading = false; // สำหรับแสดงสถานะการโหลด
+  bool _isLoading = false;
+  bool _obscureText = true; // สำหรับเปิด-ปิดตาดูรหัสผ่าน
 
   Future<void> login() async {
-    // ตรวจสอบว่ากรอกข้อมูลครบถ้วนหรือไม่
     if (userCtrl.text.isEmpty || passCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("กรุณากรอก Username และ Password")),
+        const SnackBar(
+          content: Text("กรุณากรอก Username และ Password"),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -28,48 +31,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/api/login'), // สำหรับ Emulator Android
+        Uri.parse('http://10.0.2.2:3000/api/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "username": userCtrl.text, 
+          "username": userCtrl.text,
           "password": passCtrl.text
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
-        // ตรวจสอบข้อมูลที่ได้รับจาก API
         String nameFromApi = data['full_name'] ?? userCtrl.text;
-        int idFromApi = data['user_id'] ?? 0; // รับ userId จาก Backend
+        int idFromApi = data['user_id'] ?? 0;
 
         if (!mounted) return;
 
-        // นำข้อมูลไปใช้ในหน้า HomeScreen
         Navigator.pushReplacement(
-          context, 
+          context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
               userName: nameFromApi,
-              userId: idFromApi, // ส่ง userId ไปยังหน้า Home
+              userId: idFromApi,
             ),
           ),
         );
       } else {
-        // กรณี Login ไม่สำเร็จ
         final errorData = jsonDecode(response.body);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorData['message'] ?? "Login Failed!"),
-            backgroundColor: Colors.red,
+            content: Text(errorData['message'] ?? "เข้าสู่ระบบไม่สำเร็จ"),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("เกิดข้อผิดพลาดในการเชื่อมต่อ: $e")),
+        SnackBar(content: Text("เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว: $e")),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -79,68 +79,145 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(30.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // โลโก้แอป
-              const Icon(Icons.inventory, size: 100, color: Colors.blue),
-              const SizedBox(height: 20),
-              const Text(
-                "ระบบเบิกสินค้า", 
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              const Text("กรุณาเข้าสู่ระบบเพื่อใช้งาน", style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 40),
-
-              // ช่องกรอก Username
-              TextField(
-                controller: userCtrl, 
-                decoration: const InputDecoration(
-                  labelText: "Username", 
-                  prefixIcon: Icon(Icons.person), 
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Color(0xFFF5F5F5),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // ช่องกรอก Password
-              TextField(
-                controller: passCtrl, 
-                decoration: const InputDecoration(
-                  labelText: "Password", 
-                  prefixIcon: Icon(Icons.lock), 
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Color(0xFFF5F5F5),
-                ), 
-                obscureText: true,
-              ),
-              const SizedBox(height: 30),
-
-              // ปุ่มเข้าสู่ระบบ
-              SizedBox(
-                width: double.infinity, 
-                height: 55, 
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : login, 
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("เข้าสู่ระบบ", style: TextStyle(fontSize: 18)),
-                ),
-              ),
+      body: Container(
+        // พื้นหลังแบบไล่เฉดสี
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.shade900,
+              Colors.blue.shade500,
+              Colors.blue.shade300,
             ],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Column(
+                children: [
+                  // ส่วนของ Logo และหัวข้อ
+                  const Icon(Icons.inventory_2_rounded, size: 100, color: Colors.white),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "STOCK MASTER",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const Text(
+                    "Inventory Management System",
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                  const SizedBox(height: 40),
+
+                  // การ์ดแบบฟอร์ม Login
+                  Container(
+                    padding: const EdgeInsets.all(25),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          "Welcome Back",
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 25),
+
+                        // Username Field
+                        TextField(
+                          controller: userCtrl,
+                          decoration: InputDecoration(
+                            labelText: "Username",
+                            prefixIcon: const Icon(Icons.person_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Password Field
+                        TextField(
+                          controller: passCtrl,
+                          obscureText: _obscureText,
+                          decoration: InputDecoration(
+                            labelText: "Password",
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(_obscureText ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _obscureText = !_obscureText),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+
+                        // Login Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              foregroundColor: Colors.white,
+                              elevation: 5,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? const CircularProgressIndicator(color: Colors.white)
+                                : const Text(
+                                    "SIGN IN",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    "© 2026 Inventory System v1.0",
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

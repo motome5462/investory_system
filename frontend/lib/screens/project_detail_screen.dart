@@ -500,25 +500,58 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  Future<void> _deleteGroupItems(List<dynamic> ids) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("ลบรายการสินค้า?"),
-        content: const Text("คุณต้องการลบข้อมูลสินค้านี้ใช่หรือไม่?"),
+Future<void> _deleteGroupItems(List<dynamic> ids) async {
+  // 1. แสดงหน้าต่างยืนยันก่อน
+  bool confirmDelete = await showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text("ยืนยันการลบ"),
+          ],
+        ),
+        content: const Text("คุณแน่ใจหรือไม่ว่าต้องการลบรายการสินค้านี้? ข้อมูลที่ลบแล้วไม่สามารถกู้คืนได้"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ยกเลิก", style: TextStyle(color: Colors.grey))),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("ลบออก", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), // ส่งค่า false กลับไป
+            child: const Text("ยกเลิก", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true), // ส่งค่า true กลับไป
+            child: const Text("ลบเลย", style: TextStyle(color: Colors.white)),
+          ),
         ],
-      ),
-    );
+      );
+    },
+  ) ?? false; // ถ้ากดนอกกรอบให้ถือว่าเป็น false
 
-    if (confirm == true) {
+  // 2. ถ้าผู้ใช้กดตกลง (true) ถึงจะเริ่มทำงานลบ
+  if (confirmDelete) {
+    try {
       for (var id in ids) {
         await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id'));
       }
-      fetchData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ลบรายการสินค้าเรียบร้อยแล้ว"), backgroundColor: Colors.green),
+        );
+        fetchData(); // รีเฟรชข้อมูลใหม่
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("เกิดข้อผิดพลาด: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
+}
 }

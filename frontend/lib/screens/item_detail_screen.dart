@@ -102,7 +102,7 @@ Future<void> saveAll() async {
   if (itemsList.isEmpty) return;
   try {
     for (var item in itemsList) {
-      var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:3000/api/items'));
+      var request = http.MultipartRequest('POST', Uri.parse('http://192.168.201.93:3000/api/items'));
       
       // ข้อมูลต้องเป็น String ทั้งหมด
       request.fields['project_id'] = widget.projectId.toString();

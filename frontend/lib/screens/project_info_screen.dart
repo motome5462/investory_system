@@ -55,7 +55,7 @@ class _ProjectInfoScreenState extends State<ProjectInfoScreen> {
     
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/api/projects'),
+        Uri.parse('http://192.168.201.93:3000/api/projects'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "project_name": nameCtrl.text,

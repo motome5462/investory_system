@@ -23,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Future<List<dynamic>> fetchProjects() async {
     try {
-      final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/projects'));
+      final response = await http.get(Uri.parse('http://192.168.201.93:3000/api/projects'));
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {

@@ -89,7 +89,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> fetchData() async {
     try {
       final response = await http
-          .get(Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}'))
+          .get(Uri.parse('http://192.168.201.93:3000/api/projects/${widget.projectId}'))
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -125,7 +125,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Image.network(
-                'http://10.0.2.2:3000$imageUrl',
+                'http://192.168.201.93:3000$imageUrl',
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) =>
                     const Icon(Icons.image_not_supported, size: 100, color: Colors.white),
@@ -263,7 +263,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 onPressed: () async {
                   if (itemCtrl.text.isEmpty || qtyCtrl.text.isEmpty) return;
                   List<String> sns = snControllers.map((c) => c.text.isEmpty ? "-" : c.text).toList();
-                  var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:3000/api/items'));
+                  var request = http.MultipartRequest('POST', Uri.parse('http://192.168.201.93:3000/api/items'));
                   request.fields['project_id'] = widget.projectId.toString();
                   request.fields['item_name'] = itemCtrl.text;
                   request.fields['quantity'] = qtyCtrl.text;
@@ -438,7 +438,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: item['image_url'] != null
-                    ? Image.network('http://10.0.2.2:3000${item['image_url']}', fit: BoxFit.cover)
+                    ? Image.network('http://192.168.201.93:3000${item['image_url']}', fit: BoxFit.cover)
                     : const Icon(Icons.inventory_2_rounded, color: Colors.blueAccent),
               ),
             ),
@@ -482,7 +482,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> _updateProject() async {
     try {
       final response = await http.put(
-        Uri.parse('http://10.0.2.2:3000/api/projects/${widget.projectId}'),
+        Uri.parse('http://192.168.201.93:3000/api/projects/${widget.projectId}'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "project_name": nameCtrl.text,
@@ -537,7 +537,7 @@ Future<void> _deleteGroupItems(List<dynamic> ids) async {
   if (confirmDelete) {
     try {
       for (var id in ids) {
-        await http.delete(Uri.parse('http://10.0.2.2:3000/api/items/$id'));
+        await http.delete(Uri.parse('http://192.168.201.93:3000/api/items/$id'));
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
